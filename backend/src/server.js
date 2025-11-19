@@ -1,29 +1,23 @@
-const express = require("express");
-const db = require("./db/connection");
+require('module-alias/register');
 
-require('dotenv').config();
-
-const PORT = process.env.PORT || 3000
-
-const tenantRoutes = require("./routes/tenants");
-const moduleRoutes = require("./routes/module.Route");
-const authRoutes = require("./routes/auth.Route");
+const { globSync } = require('glob');
+const path = require('path');
 
 
-const authMiddleware = require("./middlewares/auth");
-
-const app = express();
-app.use(express.json());
-
-app.use("/api/v1/auth", authRoutes);
-
-app.use("/api/v1/tenants", authMiddleware, tenantRoutes);
-app.use("/api/v1/modules", authMiddleware, moduleRoutes);
+require('dotenv').config({ path: '.env' });
+require('dotenv').config({ path: '.env.local' });
 
 
+const modelsFiles = globSync('./src/models/**/*.js');
 
+for (const filePath of modelsFiles) {
+  require(path.resolve(filePath));
+}
 
+const app = require('./app');
+app.set('port', process.env.PORT || 3000);
 
-app.listen(PORT, () => {
-  console.log(`Server running at ${PORT}`);
+// Start Server
+const server = app.listen(app.get('port'), () => {
+  console.log(`Server running on PORT : ${server.address().port}`);
 });
