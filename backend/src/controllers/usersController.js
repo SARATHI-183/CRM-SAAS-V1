@@ -72,34 +72,60 @@ async function createUser(req, res) {
 //
 // List users — Super Admin sees all; others only their tenant
 //
+// async function listUsers(req, res) {
+//   try {
+//     let users;
+
+//     if (req.user.role_id === 1) {
+//       // super admin
+//       users = await db("users").select(
+//         "id",
+//         "tenant_id",
+//         "role_id",
+//         "full_name",
+//         "email",
+//         "is_active",
+//         "created_at"
+//       );
+//     } else {
+//       // tenant admin / normal user
+//       users = await db("users")
+//         .where({ tenant_id: req.user.tenant_id })
+//         .select(
+//           "id",
+//           "tenant_id",
+//           "role_id",
+//           "full_name",
+//           "email",
+//           "is_active",
+//           "created_at"
+//         );
+//     }
+
+//     res.json(users);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// }
+
 async function listUsers(req, res) {
   try {
     let users;
 
     if (req.user.role_id === 1) {
-      // super admin
-      users = await db("users").select(
-        "id",
-        "tenant_id",
-        "role_id",
-        "full_name",
-        "email",
-        "is_active",
-        "created_at"
-      );
+      // Super Admin: optionally filter by tenant
+      const tenantId = req.query.tenant_id;
+      users = tenantId
+        ? await db("users")
+            .where({ tenant_id: tenantId })
+            .select("id","tenant_id","role_id","full_name","email","is_active","created_at")
+        : await db("users").select("id","tenant_id","role_id","full_name","email","is_active","created_at");
     } else {
-      // tenant admin / normal user
+      // Tenant Admin / User: only their own tenant
       users = await db("users")
         .where({ tenant_id: req.user.tenant_id })
-        .select(
-          "id",
-          "tenant_id",
-          "role_id",
-          "full_name",
-          "email",
-          "is_active",
-          "created_at"
-        );
+        .select("id","tenant_id","role_id","full_name","email","is_active","created_at");
     }
 
     res.json(users);
@@ -108,6 +134,7 @@ async function listUsers(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
+
 
 //
 // Get Single User – Tenant Isolated
@@ -184,28 +211,80 @@ async function updateUser(req, res) {
 //
 // Soft delete user (disable)
 //
+// async function deleteUser(req, res) {
+//   try {
+//     const { id } = req.params;
+
+//     const user = await db("users").where({ id }).first();
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     if (req.user.role_id !== 1 && user.tenant_id !== req.user.tenant_id) {
+//       return res.status(403).json({ message: "Forbidden" });
+//     }
+
+//     await db("users").where({ id }).update({
+//       is_active: false,
+//       updated_at: new Date(),
+//     });
+
+//     res.json({ message: "User deactivated" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// }
+
 async function deleteUser(req, res) {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user.role_id === 1 ? req.body.tenant_id : req.user.tenant_id;
+
+    const user = await db("users").where({ id, tenant_id: tenantId }).first();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await db("users")
+      .where({ id, tenant_id: tenantId })
+      .update({ is_active: false, updated_at: new Date() });
+
+    res.json({
+      message: "User deactivated",
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        tenant_id: user.tenant_id,
+        role_id: user.role_id,
+        is_active: false,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+async function hardDeleteUser(req, res) {
   try {
     const { id } = req.params;
 
     const user = await db("users").where({ id }).first();
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // Tenant isolation
     if (req.user.role_id !== 1 && user.tenant_id !== req.user.tenant_id) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    await db("users").where({ id }).update({
-      is_active: false,
-      updated_at: new Date(),
-    });
+    await db("users").where({ id }).del();
 
-    res.json({ message: "User deactivated" });
+    res.json({ message: "User permanently deleted", id: user.id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 }
+
+
 
 module.exports = {
   createUser,
@@ -213,4 +292,5 @@ module.exports = {
   getUser,
   updateUser,
   deleteUser,
+  hardDeleteUser
 };
