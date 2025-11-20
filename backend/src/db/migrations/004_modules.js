@@ -1,24 +1,21 @@
-exports.up = function (knex) {
-return knex.schema.createTable("modules", (table) => {
-table.increments("id").primary();
-table
-.integer("tenant_id")
-.unsigned()
-.references("id")
-.inTable("tenants")
-.onDelete("CASCADE")
-.nullable(); // null = system module
-table.string("module_name").notNullable();
-table.string("industry").nullable();
-table.boolean("is_active").defaultTo(true);
-table.boolean("is_core").defaultTo(false);
-table.string("description").nullable();
-table.timestamp("created_at").defaultTo(knex.fn.now());
-table.timestamp("updated_at").defaultTo(knex.fn.now());
-table.index(["tenant_id"], "idx_modules_tenant_id");
-});
+// 005_modules.js
+exports.up = function(knex) {
+  return knex.schema.createTable("modules", (table) => {
+    table.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
+    table.uuid("tenant_id")
+      .references("id")
+      .inTable("tenants")
+      .onDelete("CASCADE")
+      .nullable();
+    table.string("module_key").notNullable().unique();
+    table.string("module_name").notNullable();
+    table.string("description");
+    table.boolean("is_enabled").defaultTo(true);
+    table.boolean("is_core").defaultTo(false); // Add is_core column for seed distinction
+    table.timestamps(true, true);
+  });
 };
 
-exports.down = function (knex) {
-return knex.schema.dropTableIfExists("modules");
+exports.down = function(knex) {
+  return knex.schema.dropTableIfExists("modules");
 };
