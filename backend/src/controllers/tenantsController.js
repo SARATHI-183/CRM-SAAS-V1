@@ -1,5 +1,6 @@
 // src/controllers/tenantsController.js
 const db = require("../db/connection");
+const { validate: isUuid } = require('uuid');
 
 async function createTenant(req, res) {
   try {
@@ -45,9 +46,25 @@ async function getTenants(req, res) {
   }
 }
 
+// async function getTenantById(req, res) {
+//   try {
+//     const { id } = req.params;
+//     const tenant = await db("tenants").where({ id }).first();
+//     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+
+//     res.json(tenant);
+//   } catch (err) {
+//     console.error("getTenantById:", err);
+//     res.status(500).json({ message: "Error fetching tenant" });
+//   }
+// }
+
+
 async function getTenantById(req, res) {
   try {
     const { id } = req.params;
+    if (!isUuid(id)) return res.status(400).json({ message: "Invalid tenant ID" });
+
     const tenant = await db("tenants").where({ id }).first();
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
 
@@ -57,6 +74,7 @@ async function getTenantById(req, res) {
     res.status(500).json({ message: "Error fetching tenant" });
   }
 }
+
 
 module.exports = {
   createTenant,

@@ -70,17 +70,22 @@
 //   ]);
 // };
 
-// seeds/roles_seed.js
-const { v4: uuidv4 } = require("uuid");
 
-exports.seed = async function(knex) {
+// seeds/roles_seed.js
+exports.seed = async function (knex) {
   // Clear existing roles
   await knex("roles").del();
 
-  // Insert system roles with UUIDs
-  await knex("roles").insert([
-    { id: uuidv4(), role_key: "super_admin", role_name: "Super Admin", description: "Platform owner", is_system_role: true },
-    { id: uuidv4(), role_key: "tenant_admin", role_name: "Tenant Admin", description: "Admin for tenant", is_system_role: true },
-    { id: uuidv4(), role_key: "staff", role_name: "Staff", description: "Basic user", is_system_role: true }
-  ]);
+  // Insert roles and return inserted rows
+  const roles = await knex("roles")
+    .insert([
+      { role_key: "super_admin", role_name: "Super Admin", description: "Platform owner", is_system_role: true },
+      { role_key: "tenant_admin", role_name: "Tenant Admin", description: "Admin for tenant", is_system_role: true },
+      { role_key: "staff", role_name: "Staff", description: "Basic user", is_system_role: true },
+    ])
+    .returning("*");
+
+  console.log("Inserted roles:", roles.map((r) => r.id));
+  return roles;
 };
+

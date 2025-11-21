@@ -5,16 +5,23 @@ const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
 
 // Middleware
-const authMiddleware = require('./middlewares/auth');
+const { authMiddleware } = require('./middlewares/auth');
 
 // Routes
-const authRoutes = require('./routes/authRoute');
-const tenantRoutes = require('./routes/tenantsRoute');
-const moduleRoutes = require('./routes/moduleRoute');
-const usersRoutes = require("./routes/usersRoute");
-const superAdminModules = require("./routes/superadmin/module");
-const rolesRoute = require("./routes/rolesRoute");
+// const authRoutes = require('./routes/authRoute');
+// const tenantRoutes = require('./routes/tenantsRoute');
+ const moduleRoutes = require('./routes/moduleRoute');
+// const usersRoutes = require("./routes/usersRoute");
+//  const superAdminModules = require("./routes/superadmin/module");
+// const rolesRoute = require("./routes/rolesRoute");
+// const customModulesRoute = require("./modules/custom-modules/customModules.routes");
 
+const authRoutes = require("./modules/auth/auth.routes");
+const tenantRoutes = require("./modules/tenants/tenants.routes");
+const usersRoutes = require("./modules/users/users.routes");
+const rolesRoute = require("./modules/roles/roles.routes");
+const customModulesRoute = require("./modules/custom-modules/customModules.routes");
+const superAdminModules = require("./modules/superadmin-modules/modules.routes");
 
 const errorHandlers = require('./handlers/errorHandlers');
 
@@ -47,7 +54,7 @@ app.use('/api/v1/modules', authMiddleware, moduleRoutes);
 app.use("/api/v1/users", authMiddleware, usersRoutes);
 app.use("/api/v1/superadmin/modules", authMiddleware, superAdminModules);
 app.use("/api/v1/roles", authMiddleware, rolesRoute);
-
+// app.use("/api/v1/custom-modules", authMiddleware, customModulesRoute);
 
 app.use(errorHandlers.notFound);
 
