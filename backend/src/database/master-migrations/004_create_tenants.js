@@ -1,41 +1,5 @@
-// src/database/master-migrations/001_create_tenants.js
-// exports.up = async function(knex) {
-//   await knex.schema.createTable('tenants', (t) => {
-//     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-//     t.string('company_name', 200).notNullable();
-//     t.specificType('company_email', 'citext').notNullable();
-//     t.string('db_schema', 150).notNullable().unique();
-//     t.string('plan', 50).defaultTo('free');
-//     t.boolean('is_active').defaultTo(true);
-//     t.jsonb('meta').defaultTo('{}');
-//     t.timestamps(true, true);
-//   });
-
-//   // track per-tenant migration run status (optional)
-//   await knex.schema.createTable('tenant_migration_log', (t) => {
-//     t.increments('id').primary();
-//     t.uuid('tenant_id').references('id').inTable('tenants').onDelete('CASCADE');
-//     t.string('migration_name');
-//     t.timestamp('ran_at').defaultTo(knex.fn.now());
-//   });
-// };
-
-// exports.down = async function(knex) {
-//   await knex.schema.dropTableIfExists('tenant_migration_log');
-//   await knex.schema.dropTableIfExists('tenants');
-// };
-
-// src/database/master-migrations/001_create_tenants.js
-
-
-// src/database/master-migrations/001_create_tenants.js
 
 exports.up = async function(knex) {
-  // --------------------------------------------------------
-  // Enable required PostgreSQL extensions (safe: IF NOT EXISTS)
-  // --------------------------------------------------------
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "citext";`);
 
   // --------------------------------------------------------
   // TENANTS TABLE
@@ -126,5 +90,9 @@ exports.up = async function(knex) {
 
 exports.down = async function(knex) {
   await knex.schema.dropTableIfExists("tenant_migration_log");
+  await knex.schema.dropTableIfExists("domains");
+  await knex.schema.dropTableIfExists("tenant_modules");
+
+  // Then drop tenants
   await knex.schema.dropTableIfExists("tenants");
 };

@@ -1,158 +1,118 @@
-// // src/modules/super-admin/service.js
-// const { knex } = require('../../database/knex');
-// const { createTenantSchemaAndRunMigrations } = require('../../database/utils/schemaCreator');
-
-// async function createTenant({ company_name, company_email, plan = 'free' }) {
-//   if (!company_name || !company_email) throw new Error('company_name and company_email required');
-
-//   // generate tenant id + schema name
-//   const [tenant] = await knex.transaction(async (trx) => {
-//     const inserted = await trx('tenants')
-//       .insert({
-//         company_name,
-//         company_email,
-//         db_schema: null, // we'll set after schema name decided
-//         plan,
-//         is_active: true
-//       })
-//       .returning('*');
-
-//     const tenantRow = inserted[0];
-//     // generate schema name using tenant id short suffix
-//     const short = tenantRow.id.slice(0, 8);
-//     const schemaName = `tenant_${short}`;
-
-//     // update tenant row with schema name inside same txn
-//     await trx('tenants').where({ id: tenantRow.id }).update({ db_schema: schemaName });
-
-//     return [ { ...tenantRow, db_schema: schemaName } ];
-//   });
-
-//   // create schema and run tenant migrations (outside txn to avoid long transactions)
-//   await createTenantSchemaAndRunMigrations({ tenantId: tenant.id, schemaName: tenant.db_schema });
-
-//   // create default tenant admin user inside the new schema
-//   const { tenantKnex } = require('../../database/knex');
-//   const tk = tenantKnex(tenant.db_schema);
-//   try {
-//     // insert default roles and an admin user
-//     const [role] = await tk('roles').insert({ name: 'tenant_admin', permissions: JSON.stringify([]) }).returning('*');
-
-//     const bcrypt = require('bcrypt');
-//     const defaultPassword = 'ChangeMe@123';
-//     const hash = await bcrypt.hash(defaultPassword, 10);
-
-//     const [user] = await tk('users').insert({
-//       full_name: `${tenant.company_name} Admin`,
-//       email: tenant.company_email,
-//       password_hash: hash,
-//       is_active: true
-//     }).returning('*');
-
-//     await tk('user_roles').insert({ user_id: user.id, role_id: role.id });
-//   } finally {
-//     await tk.destroy();
-//   }
-
-//   return { tenant_id: tenant.id, schema: tenant.db_schema, admin_email: tenant.company_email };
-// }
-
-// module.exports = { createTenant };
-
-// src/modules/super-admin/service.js
-const { knex, tenantKnex } = require('../../database/knex');
+const { knex: masterKnex, tenantKnex } = require('../../database/knex');
+const { v4: uuidv4 } = require('uuid');
+const knex = require('../../database/knex').knex;
 const bcrypt = require('bcrypt');
 
-async function createTenant({ company_name, company_email, plan = 'free' }) {
-  if (!company_name || !company_email) throw new Error('company_name and company_email required');
+async function findSuperAdminByEmail(email) {
+  return knex('super_admins')
+    .where('email', email)
+    .first();
+}
 
-  // 1) Create tenant row in master inside a short transaction
+async function validatePassword(password, hash) {
+  return bcrypt.compare(password, hash);
+}
+
+async function createTenant({ company_name, company_email, subscription_plan = 'free' }) {
+  if (!company_name || !company_email)
+    throw new Error('company_name and company_email are required');
+
+  const tenantId = uuidv4();
+  const schemaName = `tenant_${tenantId.replace(/-/g, '_')}`;
+
   let tenantRow;
-  await knex.transaction(async (trx) => {
-    const inserted = await trx('tenants')
+
+  try {
+    // 1️⃣ Insert tenant row in master DB
+    [tenantRow] = await masterKnex('tenants')
       .insert({
+        id: tenantId,
         company_name,
         company_email,
-        plan,
+        db_schema: schemaName,
+        subscription_plan,
         is_active: true,
-        meta: {}
+        activated_at: new Date(),
+        created_at: new Date(),
+        updated_at: new Date()
       })
-      .returning(['id', 'company_name', 'company_email']);
-    tenantRow = inserted[0];
+      .returning('*');
 
-    const short = tenantRow.id.replace(/-/g, '').slice(0, 8);
-    const schemaName = `tenant_${short}`;
-    await trx('tenants').where({ id: tenantRow.id }).update({ db_schema: schemaName });
-    tenantRow.db_schema = schemaName;
-  });
+    console.log(`Tenant created in master DB: ${tenantRow.company_name}`);
 
-  // 2) Create schema and run tenant migrations OUTSIDE master transaction
-  try {
-    // Create schema (using master knex)
-    await knex.raw('CREATE SCHEMA IF NOT EXISTS ??', [tenantRow.db_schema]);
+    // 2️⃣ Create tenant schema
+    await masterKnex.raw(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+    console.log(`Schema created: ${schemaName}`);
 
-    // Run tenant migrations using tenantKnex factory
-    const tk = tenantKnex(tenantRow.db_schema);
+    // 3️⃣ Run tenant migrations (core + custom module tables)
+    const tk = tenantKnex(schemaName);
     try {
-      await tk.migrate.latest({
-        directory: './src/database/tenant-migrations',
-        tableName: `${tenantRow.db_schema}_migrations`
-      });
-
-      // Insert default roles & admin user inside tenant schema
-      // Use short-lived operations via the tenant Knex instance
-      const [role] = await tk('roles')
-        .insert({ name: 'tenant_admin', permissions: JSON.stringify([]) })
-        .returning('*');
-
-      const defaultPassword = process.env.DEFAULT_TENANT_ADMIN_PASS || 'ChangeMe@123!';
-      const passwordHash = await bcrypt.hash(defaultPassword, 12);
-
-      const [user] = await tk('users')
-        .insert({
-          full_name: `${tenantRow.company_name} Admin`,
-          email: tenantRow.company_email,
-          password_hash: passwordHash,
-          is_active: true
-        })
-        .returning('*');
-
-      await tk('user_roles').insert({ user_id: user.id, role_id: role.id });
-
+      await tk.migrate.latest(); // creates all tenant tables
+      console.log(`Tenant migrations completed for schema: ${schemaName}`);
     } finally {
-      // ensure we destroy tenantKnex
       await tk.destroy();
     }
 
-    // 3) record migration run in master log (non-critical)
-    await knex('tenant_migration_log').insert({ tenant_id: tenantRow.id, migration_name: `migrated_${tenantRow.db_schema}` });
+    // 4️⃣ Log migration in master DB
+    await masterKnex('tenant_migration_log').insert({
+      tenant_id: tenantRow.id,
+      migration_name: `migrated_${schemaName}`,
+      ran_at: new Date()
+    });
 
     return {
       tenant_id: tenantRow.id,
-      db_schema: tenantRow.db_schema,
-      admin_email: tenantRow.company_email
+      db_schema: schemaName,
+      company_name: tenantRow.company_name
     };
 
   } catch (err) {
-    // If anything fails after master row creation, cleanup to avoid orphan tenant rows & schema
-    try {
-      // drop schema if exists (best-effort)
-      await knex.raw('DROP SCHEMA IF EXISTS ?? CASCADE', [tenantRow.db_schema]);
-    } catch (dropErr) {
-      // log & continue to delete master row
-      console.error('Failed to drop schema during rollback cleanup:', dropErr);
-    }
+    console.error('Tenant creation failed:', err);
 
-    // remove master tenant row
-    try {
-      await knex('tenants').where({ id: tenantRow.id }).del();
-    } catch (delErr) {
-      console.error('Failed to delete tenant master row during rollback cleanup:', delErr);
-    }
+    // Rollback: drop tenant schema & delete master row
+    try { await masterKnex.raw(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`); } catch {}
+    try { await masterKnex('tenants').where({ id: tenantRow?.id }).del(); } catch {}
 
-    // rethrow original error for upper layers
     throw err;
   }
 }
 
-module.exports = { createTenant };
+// async function createTenantUser(tenantId, { full_name, email, password, role }) {
+//   if (!full_name || !email || !password)
+//     throw new Error("full_name, email, password are required");
+
+//   // 1️⃣ Find tenant in master DB
+//   const tenant = await masterKnex("tenants").where("id", tenantId).first();
+//   if (!tenant) throw new Error("Tenant not found");
+
+//   const schema = tenant.db_schema;
+//   const tk = tenantKnex(schema);
+
+//   // 2️⃣ Check existing user
+//   const exists = await tk("users").where("email", email).first();
+//   if (exists) throw new Error("User already exists in this tenant");
+
+//   // 3️⃣ Hash password
+//   const password_hash = await bcrypt.hash(password, 10);
+
+//   // 4️⃣ Insert into tenant.users table
+//   const [user] = await tk("users")
+//     .insert({
+//       full_name,
+//       email,
+//       role: role || "tenant_admin",
+//       password_hash,
+//       created_at: new Date(),
+//       updated_at: new Date()
+//     })
+//     .returning(["id", "full_name", "email", "role"]);
+
+//   return user;
+// }
+
+module.exports = { 
+  findSuperAdminByEmail,
+  validatePassword,
+  createTenant,
+  // createTenantUser
+};

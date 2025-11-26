@@ -1,7 +1,5 @@
 // src/database/tenant-migrations/005_activities.js
 exports.up = async function(knex) {
-  // Ensure required extension
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
 
   // -------------------------------
   // ACTIVITIES TABLE

@@ -1,10 +1,9 @@
 // src/server.js
-require('dotenv').config();
 const app = require('./app');
 const { knex } = require('./database/knex');
 const runMasterMigrations = require('./database/utils/runMasterMigrations');
 
-const PORT = process.env.PORT || 5000;
+const { PORT } = require('./config/env');
 
 async function start() {
   try {

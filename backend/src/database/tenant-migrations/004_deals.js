@@ -1,8 +1,6 @@
 // src/database/tenant-migrations/004_deals.js
 exports.up = async function(knex) {
-  // Ensure extensions exist
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
-
+ 
   // -------------------------------
   // DEALS TABLE
   // -------------------------------

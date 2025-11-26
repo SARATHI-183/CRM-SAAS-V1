@@ -1,6 +1,5 @@
 // src/database/tenant-migrations/007_audit_log.js
 exports.up = async function(knex) {
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
 
   // ---------------------------------------
   // AUDIT LOGS TABLE

@@ -51,6 +51,7 @@
 
 // knexfile.js
 require("dotenv").config();
+const path = require("path");
 
 const baseConnection = {
   host: process.env.DB_HOST || "127.0.0.1",
@@ -76,12 +77,9 @@ module.exports = {
     ...baseConfig,
     connection: baseConnection,
     migrations: {
-      directory: "./src/database/master-migrations",
+      directory: path.join(__dirname, "src/database/master-migrations"),
       tableName: "knex_master_migrations",
-    },
-    seeds: {
-      directory: "./src/database/seeders/master-seeds", // master seeds
-    },
+    }
   },
 
   // --------------------------
@@ -120,12 +118,10 @@ module.exports = {
       connection: baseConnection,
       searchPath: [schemaName, 'public'], // first schema is tenant
       migrations: {
-        directory: './src/database/tenant-migrations',
+        directory: path.join(__dirname, "src/database/tenant-migrations"),
         tableName: `${schemaName}_migrations`,
       },
-      seeds: {
-        directory: './src/database/seeders/tenant-seeds', // separate tenant seed folder
-      },
+      
     };
   }
 };

@@ -2,7 +2,6 @@
 
 exports.up = async function (knex) {
   // Needed for better search
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`);
 
   await knex.schema.createTable("leads", (t) => {
     t.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));

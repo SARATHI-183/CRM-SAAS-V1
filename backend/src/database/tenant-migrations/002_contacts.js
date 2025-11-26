@@ -1,10 +1,6 @@
 // src/database/tenant-migrations/002_contacts.js
 
 exports.up = async function (knex) {
-  // Ensure extensions
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "citext";`);
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`); // for search optimization
-
   await knex.schema.createTable("contacts", (t) => {
     t.uuid("id").primary().defaultTo(knex.raw("gen_random_uuid()"));
 

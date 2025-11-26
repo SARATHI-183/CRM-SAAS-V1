@@ -1,6 +1,5 @@
 // src/database/tenant-migrations/006_custom_fields.js
 exports.up = async function(knex) {
-  await knex.raw(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
 
   // ---------------------------------------
   // CUSTOM FIELDS TABLE
